@@ -1,6 +1,6 @@
 /**
  * CustomVisualProfile - Bunny / Vendetta plugin
- * Visually set any username + custom badges (client-side only)
+ * Change your visual username + add custom badges (client-side only)
  *
  * Install: Paste the raw URL of this file into Bunny → Plugins
  */
@@ -10,6 +10,7 @@ module.exports = (vendetta) => {
   const { findByProps, findByName } = metro;
   const { React, toasts } = ui;
 
+  // Form components
   let FormSection, FormRow, FormInput, FormDivider;
   try {
     const Forms = findByProps("FormSection", "FormRow") || {};
@@ -17,15 +18,18 @@ module.exports = (vendetta) => {
     FormRow = Forms.FormRow;
     FormInput = Forms.FormInput;
     FormDivider = Forms.FormDivider;
-  } catch (e) {}
+  } catch (e) {
+    logger.log("Failed to load Forms:", e);
+  }
 
+  // Persistent storage
   const settings = storage.createStorage("CustomVisualProfile");
   if (typeof settings.customName !== "string") settings.customName = "";
   if (!Array.isArray(settings.badges)) settings.badges = [];
 
   const unpatches = [];
 
-  // Username override
+  // ========== Username override ==========
   try {
     const UserStore = findByProps("getCurrentUser", "getUser");
     if (UserStore?.getUser) {
@@ -53,7 +57,7 @@ module.exports = (vendetta) => {
     logger.log("Username patch error:", e);
   }
 
-  // Badge injection
+  // ========== Badge injection ==========
   try {
     const ProfileBadges = findByName("ProfileBadges") || findByName("ProfileBadges", { default: false });
     if (ProfileBadges) {
@@ -69,7 +73,7 @@ module.exports = (vendetta) => {
               .filter((b) => b?.url)
               .map((b, i) =>
                 React.createElement("Image", {
-                  key: `cvp-${i}`,
+                  key: `cvp-badge-${i}`,
                   source: { uri: b.url },
                   style: { width: 18, height: 18, marginLeft: 4 },
                   resizeMode: "contain",
@@ -94,6 +98,7 @@ module.exports = (vendetta) => {
     logger.log("Badge patch error:", e);
   }
 
+  // ========== Settings UI (opens when you click the wrench) ==========
   function Settings() {
     const [name, setName] = React.useState(settings.customName || "");
     const [url, setUrl] = React.useState("");
@@ -102,7 +107,9 @@ module.exports = (vendetta) => {
 
     const saveName = () => {
       settings.customName = name.trim();
-      toasts.showToast(name.trim() ? `Username set to "${name.trim()}"` : "Username cleared");
+      toasts.showToast(
+        name.trim() ? `Username set to "${name.trim()}"` : "Username cleared"
+      );
     };
 
     const addBadge = () => {
@@ -110,7 +117,10 @@ module.exports = (vendetta) => {
         toasts.showToast("Enter a badge image URL");
         return;
       }
-      const newBadges = [...badges, { url: url.trim(), name: badgeLabel.trim() || "Custom Badge" }];
+      const newBadges = [
+        ...badges,
+        { url: url.trim(), name: badgeLabel.trim() || "Custom Badge" },
+      ];
       settings.badges = newBadges;
       setBadges(newBadges);
       setUrl("");
@@ -118,8 +128,8 @@ module.exports = (vendetta) => {
       toasts.showToast("Badge added!");
     };
 
-    const removeBadge = (i) => {
-      const newBadges = badges.filter((_, idx) => idx !== i);
+    const removeBadge = (index) => {
+      const newBadges = badges.filter((_, i) => i !== index);
       settings.badges = newBadges;
       setBadges(newBadges);
       toasts.showToast("Badge removed");
@@ -134,12 +144,18 @@ module.exports = (vendetta) => {
     };
 
     if (!FormSection) {
-      return React.createElement("Text", { style: { padding: 16, color: "#fff" } }, "Forms not available");
+      return React.createElement(
+        "Text",
+        { style: { padding: 16, color: "#fff" } },
+        "Forms not available on this Discord version"
+      );
     }
 
     return React.createElement(
       React.Fragment,
       null,
+
+      // Username section
       React.createElement(
         FormSection,
         { title: "Visual Username" },
@@ -149,8 +165,13 @@ module.exports = (vendetta) => {
           onChange: setName,
           placeholder: "Leave empty for real name",
         }),
-        React.createElement(FormRow, { label: "Save Username", onPress: saveName })
+        React.createElement(FormRow, {
+          label: "Save Username",
+          onPress: saveName,
+        })
       ),
+
+      // Badges section
       React.createElement(
         FormSection,
         { title: "Custom Badges" },
@@ -158,14 +179,18 @@ module.exports = (vendetta) => {
           title: "Badge Image URL",
           value: url,
           onChange: setUrl,
-          placeholder: "https://i.imgur.com/....png",
+          placeholder: "https://i.imgur.com/example.png",
         }),
         React.createElement(FormInput, {
           title: "Badge Name (optional)",
           value: badgeLabel,
           onChange: setBadgeLabel,
+          placeholder: "My Custom Badge",
         }),
-        React.createElement(FormRow, { label: "Add Badge", onPress: addBadge }),
+        React.createElement(FormRow, {
+          label: "Add Badge",
+          onPress: addBadge,
+        }),
         badges.length > 0 && React.createElement(FormDivider, null),
         ...badges.map((b, i) =>
           React.createElement(FormRow, {
@@ -176,14 +201,44 @@ module.exports = (vendetta) => {
           })
         )
       ),
+
+      // Danger zone
       React.createElement(
         FormSection,
         { title: "Danger Zone" },
-        React.createElement(FormRow, { label: "Clear All", onPress: clearAll })
+        React.createElement(FormRow, {
+          label: "Clear All",
+          onPress: clearAll,
+        })
       ),
+
+      // Note
       React.createElement(
         FormSection,
-        { title: "Notes" },
+        { title: "Info" },
         React.createElement(FormRow, {
           label: "Client-side only",
-          subLabel: "Only you see the changes. Other people still see your real profile.",
+          subLabel:
+            "Only you can see the custom name and badges. Everyone else still sees your real profile.",
+        })
+      )
+    );
+  }
+
+  // Plugin lifecycle
+  return {
+    onLoad() {
+      logger.log("CustomVisualProfile loaded");
+      toasts.showToast("Custom Visual Profile loaded ✨");
+    },
+    onUnload() {
+      unpatches.forEach((u) => {
+        try {
+          u();
+        } catch {}
+      });
+    },
+    // This is what makes the wrench appear and open the settings
+    settings: Settings,
+  };
+};
