@@ -1,8 +1,14 @@
 {
   "name": "CustomVisualProfile",
-  "description": "Test version",
-  "authors": [{"name": "Crazyjet", "id": "0"}],
+  "description": "Visually set any username and badges (client-side only)",
+  "authors": [
+    {
+      "name": "Crazyjet",
+      "id": "0"
+    }
+  ],
   "main": "index.js",
-  "vendetta": {"icon": "ic_person"},
-  "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  "vendetta": {
+    "icon": "ic_person"
+  }
 }
