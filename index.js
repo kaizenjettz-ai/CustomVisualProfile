@@ -187,22 +187,3 @@ module.exports = (vendetta) => {
         React.createElement(FormRow, {
           label: "Client-side only",
           subLabel: "Only you see the changes. Other people still see your real profile.",
-        })
-      )
-    );
-  }
-
-  return {
-    onLoad() {
-      logger.log("CustomVisualProfile loaded");
-      toasts.showToast("Custom Visual Profile loaded ✨");
-    },
-    onUnload() {
-      unpatches.forEach((u) => {
-        try { u(); } catch {}
-      });
-    },
-    settings: Settings,
-    load:interface(correct)
-  };
-};
