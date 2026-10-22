@@ -9,158 +9,132 @@ module.exports = (vendetta) => {
 
   const unpatches = [];
 
-  // Username override
+  // ===== USERNAME =====
   try {
     const UserStore = findByProps("getCurrentUser", "getUser");
-    if (UserStore?.getUser) {
+    if (UserStore && UserStore.getUser) {
       unpatches.push(
         patcher.instead(UserStore, "getUser", (args, orig) => {
           const user = orig(...args);
           try {
-            const me = UserStore.getCurrentUser?.();
-            if (user && me && user.id === me.id && settings.customName?.trim()) {
+            const me = UserStore.getCurrentUser && UserStore.getCurrentUser();
+            if (user && me && user.id === me.id && settings.customName && settings.customName.trim()) {
               return new Proxy(user, {
                 get(target, prop) {
                   if (prop === "username" || prop === "globalName" || prop === "displayName") {
                     return settings.customName;
                   }
                   return Reflect.get(target, prop);
-                },
+                }
               });
             }
-          } catch {}
+          } catch (e) {}
           return user;
         })
       );
     }
   } catch (e) {
-    logger.log("Username patch error:", e);
+    logger.log("Username error", e);
   }
 
-  // Badge injection
+  // ===== BADGES =====
   try {
-    const ProfileBadges = findByName("ProfileBadges") || findByName("ProfileBadges", { default: false });
+    let ProfileBadges = findByName("ProfileBadges");
+    if (!ProfileBadges) ProfileBadges = findByName("ProfileBadges", { default: false });
+
     if (ProfileBadges) {
-      const hasDefault = "default" in ProfileBadges;
+      const method = ProfileBadges.default ? "default" : undefined;
       unpatches.push(
-        patcher.after(ProfileBadges, hasDefault ? "default" : undefined, (args, res) => {
+        patcher.after(ProfileBadges, method, (args, res) => {
           try {
-            const user = args?.[0]?.user;
-            const me = findByProps("getCurrentUser")?.getCurrentUser?.();
-            if (!user || !me || user.id !== me.id || !settings.badges?.length) return res;
+            const user = args && args[0] && args[0].user;
+            const UserStore = findByProps("getCurrentUser");
+            const me = UserStore && UserStore.getCurrentUser && UserStore.getCurrentUser();
 
-            const badgeElements = settings.badges
-              .filter((b) => b?.url)
-              .map((b, i) =>
-                React.createElement("Image", {
-                  key: `cvp-${i}`,
-                  source: { uri: b.url },
-                  style: { width: 18, height: 18, marginLeft: 4 },
-                  resizeMode: "contain",
-                })
-              );
+            if (!user || !me || user.id !== me.id) return res;
+            if (!settings.badges || settings.badges.length === 0) return res;
 
-            if (!badgeElements.length) return res;
+            const badges = settings.badges
+              .filter(b => b && b.url)
+              .map((b, i) => React.createElement("Image", {
+                key: "cvp" + i,
+                source: { uri: b.url },
+                style: { width: 18, height: 18, marginLeft: 4 },
+                resizeMode: "contain"
+              }));
 
-            if (res?.props) {
-              if (Array.isArray(res.props.children)) {
-                res.props.children = [...res.props.children, ...badgeElements];
-              } else if (res.props.badges) {
-                res.props.badges = [...(res.props.badges || []), ...badgeElements];
-              }
+            if (res && res.props && Array.isArray(res.props.children)) {
+              res.props.children = res.props.children.concat(badges);
             }
-          } catch {}
+          } catch (e) {}
           return res;
         })
       );
     }
   } catch (e) {
-    logger.log("Badge patch error:", e);
+    logger.log("Badge error", e);
   }
 
-  // Simple settings that should work better
+  // ===== SETTINGS (very simple) =====
   function Settings() {
     const [name, setName] = React.useState(settings.customName || "");
     const [url, setUrl] = React.useState("");
-    const [badges, setBadges] = React.useState([...(settings.badges || [])]);
 
-    return React.createElement(
-      "ScrollView",
-      { style: { padding: 16 } },
-      React.createElement("Text", { style: { color: "#fff", fontSize: 18, marginBottom: 8 } }, "Visual Username"),
+    return React.createElement("View", { style: { padding: 16 } },
+      React.createElement("Text", { style: { color: "white", fontSize: 16, marginBottom: 8 } }, "Custom Username"),
       React.createElement("TextInput", {
-        style: { backgroundColor: "#2f3136", color: "#fff", padding: 10, borderRadius: 8, marginBottom: 8 },
+        style: { backgroundColor: "#2f3136", color: "white", padding: 10, borderRadius: 6, marginBottom: 10 },
         value: name,
         onChangeText: setName,
-        placeholder: "Enter custom name",
-        placeholderTextColor: "#72767d"
+        placeholder: "Type a name..."
       }),
-      React.createElement("TouchableOpacity", {
-        style: { backgroundColor: "#5865F2", padding: 12, borderRadius: 8, alignItems: "center", marginBottom: 20 },
+      React.createElement("Text", {
+        style: { color: "#5865F2", marginBottom: 20 },
         onPress: () => {
           settings.customName = name.trim();
-          toasts.showToast(name.trim() ? `Username set to "${name.trim()}"` : "Username cleared");
+          toasts.showToast(name.trim() ? "Username saved" : "Username cleared");
         }
-      }, React.createElement("Text", { style: { color: "#fff", fontWeight: "bold" } }, "Save Username")),
+      }, "→ Save Username"),
 
-      React.createElement("Text", { style: { color: "#fff", fontSize: 18, marginBottom: 8 } }, "Add Badge"),
+      React.createElement("Text", { style: { color: "white", fontSize: 16, marginBottom: 8 } }, "Badge Image URL"),
       React.createElement("TextInput", {
-        style: { backgroundColor: "#2f3136", color: "#fff", padding: 10, borderRadius: 8, marginBottom: 8 },
+        style: { backgroundColor: "#2f3136", color: "white", padding: 10, borderRadius: 6, marginBottom: 10 },
         value: url,
         onChangeText: setUrl,
-        placeholder: "https://i.imgur.com/....png",
-        placeholderTextColor: "#72767d"
+        placeholder: "https://i.imgur.com/...."
       }),
-      React.createElement("TouchableOpacity", {
-        style: { backgroundColor: "#5865F2", padding: 12, borderRadius: 8, alignItems: "center", marginBottom: 20 },
+      React.createElement("Text", {
+        style: { color: "#5865F2", marginBottom: 20 },
         onPress: () => {
           if (!url.trim()) {
-            toasts.showToast("Enter a badge image URL");
+            toasts.showToast("Enter a URL first");
             return;
           }
-          const newBadges = [...badges, { url: url.trim(), name: "Custom Badge" }];
-          settings.badges = newBadges;
-          setBadges(newBadges);
+          settings.badges = settings.badges.concat([{ url: url.trim() }]);
           setUrl("");
-          toasts.showToast("Badge added!");
+          toasts.showToast("Badge added");
         }
-      }, React.createElement("Text", { style: { color: "#fff", fontWeight: "bold" } }, "Add Badge")),
+      }, "→ Add Badge"),
 
-      badges.length > 0 && React.createElement("Text", { style: { color: "#fff", fontSize: 16, marginBottom: 8 } }, "Your Badges (tap to remove):"),
-      ...badges.map((b, i) =>
-        React.createElement("TouchableOpacity", {
-          key: i,
-          style: { backgroundColor: "#2f3136", padding: 12, borderRadius: 8, marginBottom: 8 },
-          onPress: () => {
-            const newBadges = badges.filter((_, idx) => idx !== i);
-            settings.badges = newBadges;
-            setBadges(newBadges);
-            toasts.showToast("Badge removed");
-          }
-        }, React.createElement("Text", { style: { color: "#fff" } }, b.url))
-      ),
-
-      React.createElement("TouchableOpacity", {
-        style: { backgroundColor: "#ed4245", padding: 12, borderRadius: 8, alignItems: "center", marginTop: 20 },
+      React.createElement("Text", {
+        style: { color: "#ed4245", marginTop: 20 },
         onPress: () => {
           settings.customName = "";
           settings.badges = [];
           setName("");
-          setBadges([]);
-          toasts.showToast("Everything cleared");
+          toasts.showToast("Cleared everything");
         }
-      }, React.createElement("Text", { style: { color: "#fff", fontWeight: "bold" } }, "Clear All"))
+      }, "→ Clear All")
     );
   }
 
   return {
     onLoad() {
-      logger.log("CustomVisualProfile loaded");
-      toasts.showToast("Custom Visual Profile loaded");
+      toasts.showToast("CustomVisualProfile loaded");
     },
     onUnload() {
-      unpatches.forEach((u) => { try { u(); } catch {} });
+      unpatches.forEach(u => { try { u(); } catch(e) {} });
     },
-    settings: Settings,
+    settings: Settings
   };
 };
